@@ -1,12 +1,13 @@
-// vtest build: !docker-ubuntu-musl // failing assert static_gzip_test.v:224 -> `.gz cache file should not be created on readonly filesystem`, because of the Docker container
+// vtest build: !docker-ubuntu-musl // failing assert static_compression_test.v:224 -> `.gz cache file should not be created on readonly filesystem`, because of the Docker container
 import veb
 import net.http
 import os
 import time
 import compress.gzip
+import compress.zstd
 
 const port = 14013
-const port_no_auto = 14014 // Port for static_gzip_max_size = 0 test
+const port_no_auto = 14014 // Port for static_compressed_max_size = 0 test
 
 const localserver = 'http://127.0.0.1:${port}'
 const localserver_no_auto = 'http://127.0.0.1:${port_no_auto}'
@@ -38,22 +39,30 @@ fn testsuite_begin() {
 	os.chdir(os.dir(@FILE))!
 
 	// Create test directory and files
-	os.mkdir_all('testdata_gzip')!
-	os.write_file('testdata_gzip/test.txt', test_file_content)!
-	os.write_file('testdata_gzip/large.txt', test_file_content.repeat(100))!
+	os.mkdir_all('testdata_compression')!
+	os.write_file('testdata_compression/test.txt', test_file_content)!
+	os.write_file('testdata_compression/large.txt', test_file_content.repeat(100))!
 
 	// Create readonly directory and file for readonly filesystem test
-	os.mkdir_all('testdata_gzip/readonly')!
-	os.write_file('testdata_gzip/readonly/readonly.txt', 'This is a readonly file test')!
+	os.mkdir_all('testdata_compression/readonly')!
+	os.write_file('testdata_compression/readonly/readonly.txt', 'This is a readonly file test')!
 
 	// Create pre-compressed file for manual .gz test
 	large_content := 'X'.repeat(2000)
-	os.write_file('testdata_gzip/precompressed.txt', large_content)!
-	compressed := gzip.compress(large_content.bytes()) or { panic(err) }
-	os.write_file('testdata_gzip/precompressed.txt.gz', compressed.bytestr())!
+	os.write_file('testdata_compression/precompressed.txt', large_content)!
+	compressed_gz := gzip.compress(large_content.bytes()) or { panic(err) }
+	os.write_file('testdata_compression/precompressed.txt.gz', compressed_gz.bytestr())!
+
+	// Create pre-compressed file for manual .zst test
+	os.write_file('testdata_compression/precompressed_zstd.txt', large_content)!
+	compressed_zst := zstd.compress(large_content.bytes()) or { panic(err) }
+	os.write_file('testdata_compression/precompressed_zstd.txt.zst', compressed_zst.bytestr())!
+
+	// Create test file for zstd auto-compression
+	os.write_file('testdata_compression/zstd_test.txt', test_file_content)!
 
 	// Create file for testing max_size = 0 (no auto-compression)
-	os.write_file('testdata_gzip/no_auto.txt', 'This file should not be auto-compressed')!
+	os.write_file('testdata_compression/no_auto.txt', 'This file should not be auto-compressed')!
 
 	spawn fn () {
 		time.sleep(exit_after)
@@ -67,19 +76,19 @@ fn testsuite_begin() {
 
 fn testsuite_end() {
 	// Clean up test files
-	os.rmdir_all('testdata_gzip') or {}
+	os.rmdir_all('testdata_compression') or {}
 }
 
 fn run_app_test() {
 	mut app := &App{}
 
-	// Enable static gzip compression
-	app.enable_static_gzip = true
-	app.static_gzip_max_size = 1048576 // 1MB
+	// Enable static compression (zstd/gzip)
+	app.enable_static_compression = true
+	app.static_compressed_max_size = 1048576 // 1MB
 
-	app.handle_static('testdata_gzip', true) or { panic(err) }
+	app.handle_static('testdata_compression', true) or { panic(err) }
 
-	// Add gzip middleware
+	// Add compression middleware (gzip for this test app)
 	app.use(veb.encode_gzip[Context]())
 
 	spawn veb.run_at[App, Context](mut app, port: port, timeout_in_seconds: 25, family: .ip)
@@ -89,13 +98,13 @@ fn run_app_test() {
 fn run_no_auto_compression_test() {
 	mut app := &App{}
 
-	// Enable static gzip but disable auto-compression (max_size = 0)
-	app.enable_static_gzip = true
-	app.static_gzip_max_size = 0 // Disable auto-compression
+	// Enable static compression but disable auto-compression (max_size = 0)
+	app.enable_static_compression = true
+	app.static_compressed_max_size = 0 // Disable auto-compression
 
-	app.handle_static('testdata_gzip', true) or { panic(err) }
+	app.handle_static('testdata_compression', true) or { panic(err) }
 
-	// Add gzip middleware
+	// Add compression middleware (gzip for this test app)
 	app.use(veb.encode_gzip[Context]())
 
 	spawn veb.run_at[App, Context](mut app,
@@ -149,7 +158,7 @@ fn test_gz_file_cache_creation() {
 	_ := req.do()!
 
 	// Check that .gz file was created
-	gz_path := 'testdata_gzip/test.txt.gz'
+	gz_path := 'testdata_compression/test.txt.gz'
 	assert os.exists(gz_path), '.gz cache file should be created'
 
 	// Second request should use cached .gz file
@@ -204,7 +213,7 @@ fn test_readonly_filesystem_fallback() {
 	}
 
 	// Make readonly directory readonly (no write permissions)
-	readonly_dir := 'testdata_gzip/readonly'
+	readonly_dir := 'testdata_compression/readonly'
 	readonly_file := '${readonly_dir}/readonly.txt'
 
 	os.chmod(readonly_dir, 0o555)! // r-xr-xr-x
@@ -232,9 +241,46 @@ fn test_readonly_filesystem_fallback() {
 	assert decompressed.bytestr() == 'This is a readonly file test'
 }
 
+fn test_readonly_filesystem_fallback_zstd() {
+	// Test that zstd compression works even on readonly filesystems (fallback to memory)
+	// Skip on Windows as readonly permissions work differently (ACL vs chmod)
+	$if windows {
+		eprintln('Skipping readonly filesystem test on Windows')
+		return
+	}
+
+	// Make readonly directory readonly (no write permissions)
+	readonly_dir := 'testdata_compression/readonly'
+	readonly_file := '${readonly_dir}/readonly.txt'
+
+	os.chmod(readonly_dir, 0o555)! // r-xr-xr-x
+
+	mut req := http.new_request(.get, '${localserver}/readonly/readonly.txt', '')
+	req.add_header(.accept_encoding, 'zstd')
+	x := req.do()!
+
+	// Restore permissions before assertions (for cleanup)
+	os.chmod(readonly_dir, 0o755) or {} // rwxr-xr-x
+
+	assert x.status() == .ok
+	// Should be compressed (served from memory as fallback)
+	assert x.header.get(.content_encoding)! == 'zstd'
+
+	// Verify that .zst file was NOT created (readonly filesystem)
+	zst_path := '${readonly_file}.zst'
+	assert !os.exists(zst_path), '.zst cache file should not be created on readonly filesystem'
+
+	// Verify content is valid zstd
+	decompressed := zstd.decompress(x.body.bytes()) or {
+		assert false, 'response should be valid zstd even on readonly fs: ${err}'
+		return
+	}
+	assert decompressed.bytestr() == 'This is a readonly file test'
+}
+
 fn test_precompressed_gz_file_served() {
 	// Test that manually pre-compressed .gz files are always served
-	// This validates the manual pre-compression workflow (useful with static_gzip_max_size = 0)
+	// This validates the manual pre-compression workflow (useful with static_compressed_max_size = 0)
 
 	// Request the pre-compressed file
 	mut req := http.new_request(.get, '${localserver}/precompressed.txt', '')
@@ -256,7 +302,7 @@ fn test_precompressed_gz_file_served() {
 }
 
 fn test_no_auto_compression_with_max_size_zero() {
-	// Test that static_gzip_max_size = 0 disables auto-compression
+	// Test that static_compressed_max_size = 0 disables auto-compression
 	// but still serves manually pre-compressed .gz files
 
 	// 1. Verify manually pre-compressed .gz files are still served
@@ -288,9 +334,86 @@ fn test_no_auto_compression_with_max_size_zero() {
 		assert y.body == 'This file should not be auto-compressed'
 		return
 	}
-	assert false, 'should not auto-compress with static_gzip_max_size = 0'
+	assert false, 'should not auto-compress with static_compressed_max_size = 0'
 
 	// 3. Verify that .gz file was NOT created
-	gz_path := 'testdata_gzip/no_auto.txt.gz'
+	gz_path := 'testdata_compression/no_auto.txt.gz'
 	assert !os.exists(gz_path), '.gz cache file should not be created with max_size = 0'
+}
+
+// Zstd tests
+
+fn test_zstd_preferred_over_gzip() {
+	// When client supports both zstd and gzip, zstd should be preferred
+	mut req := http.new_request(.get, '${localserver}/zstd_test.txt', '')
+	req.add_header(.accept_encoding, 'gzip, zstd, br')
+	x := req.do()!
+
+	assert x.status() == .ok
+	assert x.header.get(.content_encoding)! == 'zstd', 'zstd should be preferred over gzip'
+	assert x.header.get(.vary)! == 'Accept-Encoding'
+
+	// Verify the body is valid zstd
+	decompressed := zstd.decompress(x.body.bytes()) or {
+		assert false, 'failed to decompress zstd response: ${err}'
+		return
+	}
+	assert decompressed.bytestr() == test_file_content
+}
+
+fn test_zst_file_cache_creation() {
+	// First request should create .zst cache file
+	mut req := http.new_request(.get, '${localserver}/zstd_test.txt', '')
+	req.add_header(.accept_encoding, 'zstd')
+	_ := req.do()!
+
+	// Check that .zst file was created
+	zst_path := 'testdata_compression/zstd_test.txt.zst'
+	assert os.exists(zst_path), '.zst cache file should be created'
+
+	// Second request should use cached .zst file
+	y := req.do()!
+	assert y.status() == .ok
+	assert y.header.get(.content_encoding)! == 'zstd'
+
+	// Verify Content-Length matches .zst file size
+	zst_file_size := os.file_size(zst_path)
+	content_length := y.header.get(.content_length)!.u64()
+	assert content_length == zst_file_size, 'Content-Length should match .zst file size'
+}
+
+fn test_precompressed_zst_file_served() {
+	// Test that manually pre-compressed .zst files are served
+	mut req := http.new_request(.get, '${localserver}/precompressed_zstd.txt', '')
+	req.add_header(.accept_encoding, 'zstd')
+	x := req.do()!
+
+	assert x.status() == .ok
+	assert x.header.get(.content_encoding)! == 'zstd'
+	assert x.header.get(.vary)! == 'Accept-Encoding'
+
+	// Verify it's the pre-compressed content
+	large_content := 'X'.repeat(2000)
+	decompressed := zstd.decompress(x.body.bytes()) or {
+		assert false, 'manual .zst should be valid: ${err}'
+		return
+	}
+	assert decompressed.bytestr() == large_content
+}
+
+fn test_gzip_fallback_when_zstd_not_supported() {
+	// When client only supports gzip, gzip should be used
+	mut req := http.new_request(.get, '${localserver}/zstd_test.txt', '')
+	req.add_header(.accept_encoding, 'gzip')
+	x := req.do()!
+
+	assert x.status() == .ok
+	assert x.header.get(.content_encoding)! == 'gzip', 'should fallback to gzip when zstd not supported'
+
+	// Verify the body is valid gzip
+	decompressed := gzip.decompress(x.body.bytes()) or {
+		assert false, 'failed to decompress gzip response: ${err}'
+		return
+	}
+	assert decompressed.bytestr() == test_file_content
 }
