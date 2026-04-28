@@ -112,21 +112,63 @@ pub fn (mut p Packer) pack[T](val T) ! {
 			}
 		}
 		p.pack_map_header(u64(field_count))
-		$for field in T.fields {
-			if !cbor_field_skipped(field) {
-				mut key := cbor_field_key(field)
-				if strategy != '' && !cbor_field_renamed(field) {
-					key = cbor_rename(field.name, strategy)
-				}
-				p.pack_text(key)
-				$if field.typ is $option {
-					if val.$(field.name) == none {
-						p.pack_null()
-					} else {
-						p.pack(get_value_from_optional(val.$(field.name)))!
+		if p.opts.canonical && field_count > 1 {
+			// RFC 8949 §4.2.1: deterministic encoding requires keys to
+			// be ordered by their encoded byte form, not by struct
+			// declaration. Encode each (key, value) pair to a sub-buffer,
+			// sort, then splice — same shape as the $map branch above.
+			mut encoded_keys := [][]u8{cap: field_count}
+			mut encoded_vals := [][]u8{cap: field_count}
+			$for field in T.fields {
+				if !cbor_field_skipped(field) {
+					mut key := cbor_field_key(field)
+					if strategy != '' && !cbor_field_renamed(field) {
+						key = cbor_rename(field.name, strategy)
 					}
-				} $else {
-					p.pack(val.$(field.name))!
+					mut ksub := new_packer(EncodeOpts{ initial_cap: 16, canonical: true })
+					ksub.pack_text(key)
+					encoded_keys << ksub.bytes().clone()
+					mut vsub := new_packer(EncodeOpts{ initial_cap: 16, canonical: true })
+					$if field.typ is $option {
+						if val.$(field.name) == none {
+							vsub.pack_null()
+						} else {
+							vsub.pack(get_value_from_optional(val.$(field.name)))!
+						}
+					} $else {
+						vsub.pack(val.$(field.name))!
+					}
+					encoded_vals << vsub.bytes().clone()
+				}
+			}
+			mut idx := []int{len: field_count, init: index}
+			idx.sort_with_compare(fn [encoded_keys] (a &int, b &int) int {
+				return compare_canonical_keys(encoded_keys[*a], encoded_keys[*b])
+			})
+			for i in idx {
+				p.reserve(encoded_keys[i].len + encoded_vals[i].len)
+				unsafe {
+					p.buf.push_many(encoded_keys[i].data, encoded_keys[i].len)
+					p.buf.push_many(encoded_vals[i].data, encoded_vals[i].len)
+				}
+			}
+		} else {
+			$for field in T.fields {
+				if !cbor_field_skipped(field) {
+					mut key := cbor_field_key(field)
+					if strategy != '' && !cbor_field_renamed(field) {
+						key = cbor_rename(field.name, strategy)
+					}
+					p.pack_text(key)
+					$if field.typ is $option {
+						if val.$(field.name) == none {
+							p.pack_null()
+						} else {
+							p.pack(get_value_from_optional(val.$(field.name)))!
+						}
+					} $else {
+						p.pack(val.$(field.name))!
+					}
 				}
 			}
 		}

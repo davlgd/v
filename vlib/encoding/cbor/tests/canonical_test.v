@@ -106,3 +106,43 @@ fn test_self_describe_prefix() {
 	// Magic prefix: d9 d9 f7 then 0x00.
 	assert beq(bytes, [u8(0xd9), 0xd9, 0xf7, 0x00])
 }
+
+// ---------------------------------------------------------------------
+// Struct-as-map canonical encoding: declaration order MUST NOT leak
+// into the wire form when canonical mode is on. Otherwise hash- or
+// signature-based payloads (COSE, CWT, DAG-CBOR) lose stability across
+// V versions whenever a field is added or reordered in source.
+// ---------------------------------------------------------------------
+
+struct OutOfOrder {
+	zeta  int
+	alpha int
+	mid   int
+}
+
+fn test_canonical_struct_sorts_keys_by_encoded_form() {
+	v := OutOfOrder{
+		zeta:  1
+		alpha: 2
+		mid:   3
+	}
+	got := cbor.encode[OutOfOrder](v, cbor.EncodeOpts{ canonical: true })!
+	// Length-first lex on encoded keys: "mid" (4B) < "zeta" (5B) < "alpha" (6B).
+	// a3 636d6964 03 647a657461 01 65616c706861 02
+	want := h('a3636d69640364 7a65746101 65616c706861 02'.replace(' ', ''))
+	assert beq(got, want), 'declaration order leaked: got ${hex.encode(got)}'
+}
+
+fn test_canonical_struct_preserves_declaration_order_when_off() {
+	// Default (non-canonical) keeps source order — important for human
+	// inspection and matches the documented permissive behaviour.
+	v := OutOfOrder{
+		zeta:  1
+		alpha: 2
+		mid:   3
+	}
+	got := cbor.encode[OutOfOrder](v, cbor.EncodeOpts{})!
+	// a3 647a657461 01 65616c706861 02 636d6964 03
+	want := h('a3647a65746101 65616c706861 02 636d6964 03'.replace(' ', ''))
+	assert beq(got, want), 'non-canonical reorder: got ${hex.encode(got)}'
+}
