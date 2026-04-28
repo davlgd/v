@@ -449,7 +449,12 @@ pub fn (mut u Unpacker) unpack_array_header() !i64 {
 	if info == 31 {
 		return -1
 	}
-	return i64(u.read_arg(info)!)
+	arg := u.read_arg(info)!
+	if arg > u64(max_i64) {
+		u.pos = start
+		return int_range(start, 'i64', arg.str())
+	}
+	return i64(arg)
 }
 
 // unpack_map_header reads the prefix of a map. Returns pair count or -1
@@ -466,7 +471,12 @@ pub fn (mut u Unpacker) unpack_map_header() !i64 {
 	if info == 31 {
 		return -1
 	}
-	return i64(u.read_arg(info)!)
+	arg := u.read_arg(info)!
+	if arg > u64(max_i64) {
+		u.pos = start
+		return int_range(start, 'i64', arg.str())
+	}
+	return i64(arg)
 }
 
 // unpack_tag reads a tag header and returns the tag number. The caller

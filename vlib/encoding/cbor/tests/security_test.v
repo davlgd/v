@@ -181,3 +181,36 @@ fn test_tag1_wrapping_int_or_float_accepted() {
 	}
 	assert v2 is cbor.Tag
 }
+
+// ---------------------------------------------------------------------
+// Header-length overflow: lengths beyond i64::max must be rejected,
+// not silently wrapped to -1 (which would alias the indefinite-length
+// sentinel and steer callers into the wrong loop). See decoder.v
+// `unpack_array_header` / `unpack_map_header`.
+// ---------------------------------------------------------------------
+
+fn test_array_header_oversized_length_rejected() {
+	// 9b ff ff ff ff ff ff ff ff = array, info=27, arg=u64::max.
+	mut u := cbor.new_unpacker(h('9bffffffffffffffff'), cbor.DecodeOpts{})
+	if n := u.unpack_array_header() {
+		assert false, 'expected oversized length rejection, got ${n}'
+	}
+}
+
+fn test_map_header_oversized_length_rejected() {
+	// bb ff ff ff ff ff ff ff ff = map, info=27, arg=u64::max.
+	mut u := cbor.new_unpacker(h('bbffffffffffffffff'), cbor.DecodeOpts{})
+	if n := u.unpack_map_header() {
+		assert false, 'expected oversized length rejection, got ${n}'
+	}
+}
+
+fn test_array_header_at_i64_max_accepted() {
+	// 9b 7f ff ff ff ff ff ff ff = array, info=27, arg=i64::max — boundary.
+	mut u := cbor.new_unpacker(h('9b7fffffffffffffff'), cbor.DecodeOpts{})
+	n := u.unpack_array_header() or {
+		assert false, 'i64::max boundary must succeed: ${err}'
+		return
+	}
+	assert n == max_i64
+}
