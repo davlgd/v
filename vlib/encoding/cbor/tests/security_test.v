@@ -214,3 +214,37 @@ fn test_array_header_at_i64_max_accepted() {
 	}
 	assert n == max_i64
 }
+
+// ---------------------------------------------------------------------
+// skip_value MUST enforce RFC 8949 §3.2.3 chunk rules for indefinite
+// strings: each chunk must be a definite-length string of the same
+// major type. Otherwise the skip path silently accepts what
+// unpack_text / unpack_bytes correctly reject — letting malformed
+// CBOR through RawMessage / Unmarshaler / unknown-field skipping.
+// ---------------------------------------------------------------------
+
+fn test_skip_value_rejects_cross_type_indef_string_chunk() {
+	// 7f 41 00 ff = indef text containing one bytes chunk (major=2),
+	// then break. unpack_text rejects this; skip_value used to accept.
+	mut u := cbor.new_unpacker(h('7f4100ff'), cbor.DecodeOpts{})
+	if _ := u.skip_value() {
+		assert false, 'skip_value must reject cross-type indef chunk'
+	}
+}
+
+fn test_skip_value_rejects_nested_indef_string_chunk() {
+	// 7f 7f 61 61 ff ff = indef text whose chunk is itself indefinite.
+	mut u := cbor.new_unpacker(h('7f7f6161ffff'), cbor.DecodeOpts{})
+	if _ := u.skip_value() {
+		assert false, 'skip_value must reject nested indef chunk'
+	}
+}
+
+fn test_raw_message_rejects_malformed_indef_string() {
+	// Same payload as above, but exercised through the RawMessage path
+	// (which calls skip_value internally to compute the slice bounds).
+	mut u := cbor.new_unpacker(h('7f4100ff'), cbor.DecodeOpts{})
+	if _ := u.unpack_raw() {
+		assert false, 'unpack_raw must reject cross-type indef chunk'
+	}
+}

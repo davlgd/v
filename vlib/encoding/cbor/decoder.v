@@ -533,12 +533,26 @@ fn (mut u Unpacker) skip_inner(depth int) ! {
 		}
 		2, 3 {
 			if info == 31 {
+				// RFC 8949 §3.2.3: each chunk MUST be a definite-length
+				// string of the same major type — no nested indefinite,
+				// no cross-type chunks. Mirror unpack_text/unpack_bytes.
 				for {
 					if u.peek_break() {
 						u.pos++
 						break
 					}
-					u.skip_inner(depth + 1)!
+					cb := u.read_byte()!
+					cmajor := cb >> 5
+					cinfo := cb & 0x1f
+					if cmajor != major || cinfo == 31 {
+						return malformed(u.pos - 1,
+							'indefinite-length string chunk must be a definite-length string of the same major type')
+					}
+					csize := u.read_arg(cinfo)!
+					if u.pos + int(csize) > u.data.len {
+						return eof_needing(u.pos, int(csize), u.data.len - u.pos)
+					}
+					u.pos += int(csize)
 				}
 			} else {
 				size := u.read_arg(info)!
