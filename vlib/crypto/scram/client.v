@@ -14,9 +14,11 @@ pub:
 	// username is the authentication identity. It is escaped as needed, so it
 	// may contain commas and equals signs.
 	username string @[required]
-	// password is the secret. See the SASLprep note in the module README if it
-	// may contain non-ASCII characters. It is required rather than defaulted,
-	// so that an exchange is never attempted with an empty password by accident.
+	// password is the secret. Prepare and validate it before passing it:
+	// SASLprep for `.sha1`, PRECIS OpaqueString for `.sha256`, and the profile
+	// agreed with the peer for `.sha512`. The module hashes its bytes unchanged.
+	// It is required so an exchange is never attempted with an empty password
+	// by accident.
 	password string @[required]
 	// mechanism selects the hash. Prefer the default over `.sha1`, which
 	// survives only for servers that offer nothing better.

@@ -38,8 +38,8 @@
 // Against a real server only the client half is used: send `client.first()`,
 // feed the reply to `client.final()`, send that, and hand the last reply to
 // `client.verify()`. The transport is not this module's concern — SCRAM
-// messages are ASCII strings that a protocol such as PostgreSQL's or
-// MongoDB's carries as SASL payloads.
+// messages are byte-preserving strings that may contain UTF-8 identities. A
+// protocol such as PostgreSQL or MongoDB carries them as SASL payloads.
 //
 // Both `Client` and `Server` are single-use: one value drives exactly one
 // authentication exchange, and calling the steps out of order is an error
@@ -223,8 +223,9 @@ pub fn (c Credentials) str() string {
 // to reproduce an existing record; prefer `new_credentials` for a fresh user,
 // as it picks a random salt for you.
 //
-// The password must already be normalised: see the SASLprep note in the
-// module README.
+// Prepare and validate the password before calling: SASLprep for `.sha1`,
+// PRECIS OpaqueString for `.sha256`, and the profile agreed with the peer for
+// `.sha512`. This function hashes the supplied bytes unchanged.
 pub fn derive_credentials(mechanism Mechanism, password string, salt []u8, iterations int) !Credentials {
 	if salt.len == 0 {
 		return error('scram: the salt must not be empty')

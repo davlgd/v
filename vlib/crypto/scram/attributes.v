@@ -5,6 +5,7 @@
 module scram
 
 import encoding.base64
+import encoding.utf8.validate
 
 // ChannelBindingMode says how an exchange relates to the TLS channel
 // underneath it, and becomes the GS2 `cbind-flag` on the wire. The
@@ -209,6 +210,11 @@ fn parse_attributes(message string) ![]Attribute {
 		if part[2..].contains('\0') {
 			return MalformedMessage{
 				reason: 'attribute values must not contain a NUL byte'
+			}
+		}
+		if !validate.utf8_string(part[2..]) {
+			return MalformedMessage{
+				reason: 'attribute values must contain valid UTF-8'
 			}
 		}
 		if part[0] == `m` && out.len > 0 {

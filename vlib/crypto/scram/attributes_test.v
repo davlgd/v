@@ -71,6 +71,12 @@ fn test_parse_attributes_accepts_an_empty_extension_value() {
 	assert attrs[0].key == `x` && attrs[0].value == ''
 }
 
+fn test_parse_attributes_accepts_a_utf8_extension_value() {
+	attrs := parse_attributes('x=rené')!
+	assert attrs.len == 1
+	assert attrs[0].key == `x` && attrs[0].value == 'rené'
+}
+
 fn test_parse_attributes_refuses_a_nul_byte_in_any_value() {
 	for message in ['x=\0', 'r=nonce,x=before\0after'] {
 		parse_attributes(message) or {
@@ -80,6 +86,16 @@ fn test_parse_attributes_refuses_a_nul_byte_in_any_value() {
 		}
 		assert false, 'accepted a NUL byte in `${message}`'
 	}
+}
+
+fn test_parse_attributes_refuses_invalid_utf8_in_any_value() {
+	message := [u8(`x`), `=`, 0xff].bytestr()
+	parse_attributes(message) or {
+		assert err is MalformedMessage
+		assert err.msg().contains('must contain valid UTF-8')
+		return
+	}
+	assert false, 'accepted invalid UTF-8 in an attribute value'
 }
 
 fn test_parse_attributes_refuses_duplicate_names() {
