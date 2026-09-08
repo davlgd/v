@@ -71,6 +71,17 @@ fn test_parse_attributes_accepts_an_empty_extension_value() {
 	assert attrs[0].key == `x` && attrs[0].value == ''
 }
 
+fn test_parse_attributes_refuses_a_nul_byte_in_any_value() {
+	for message in ['x=\0', 'r=nonce,x=before\0after'] {
+		parse_attributes(message) or {
+			assert err is MalformedMessage, message
+			assert err.msg().contains('must not contain a NUL byte'), message
+			continue
+		}
+		assert false, 'accepted a NUL byte in `${message}`'
+	}
+}
+
 fn test_parse_attributes_refuses_duplicate_names() {
 	for message in ['r=one,r=two', 'r=one,s=c2FsdA==,r=two'] {
 		parse_attributes(message) or {

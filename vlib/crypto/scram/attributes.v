@@ -206,6 +206,11 @@ fn parse_attributes(message string) ![]Attribute {
 				reason: 'attribute names must be letters, got `${part[0].ascii_str()}`'
 			}
 		}
+		if part[2..].contains('\0') {
+			return MalformedMessage{
+				reason: 'attribute values must not contain a NUL byte'
+			}
+		}
 		if part[0] == `m` && out.len > 0 {
 			return MalformedMessage{
 				reason: 'the mandatory extension attribute `m=` must be first'
