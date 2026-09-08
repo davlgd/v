@@ -71,8 +71,9 @@ pub const default_max_iterations = 1_048_576
 
 // default_iterations is the iteration count used by `new_credentials` when
 // the caller does not pick one. RFC 7677 §4 gives 4096 as the floor; this
-// module defaults an order of magnitude above it, which stays well under a
-// millisecond of CPU per login on current hardware.
+// module defaults an order of magnitude above it. Derivation typically takes
+// tens of milliseconds on contemporary desktop CPUs; benchmark the target
+// deployment when sizing authentication capacity.
 pub const default_iterations = 32768
 
 // default_salt_size is the number of random bytes `new_credentials` uses for
@@ -83,6 +84,7 @@ pub const default_salt_size = 16
 // base64 spelling that goes on the wire is longer, and comfortably above the
 // entropy RFC 5802 §5.1 asks for.
 const nonce_size = 24
+const max_wire_iterations = 999_999_999
 
 // Mechanism selects the hash function of a SCRAM exchange, which is the only
 // thing that varies between the members of the SCRAM family.
@@ -232,6 +234,9 @@ pub fn derive_credentials(mechanism Mechanism, password string, salt []u8, itera
 	}
 	if iterations < 1 {
 		return error('scram: the iteration count must be at least 1, got ${iterations}')
+	}
+	if iterations > max_wire_iterations {
+		return error('scram: the iteration count must not exceed ${max_wire_iterations}, got ${iterations}')
 	}
 	salted := mechanism.hi(password.bytes(), salt, iterations)
 	client_key := mechanism.hmac(salted, 'Client Key'.bytes())

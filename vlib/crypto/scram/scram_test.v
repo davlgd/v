@@ -57,6 +57,14 @@ fn test_derive_credentials_rejects_unusable_parameters() {
 	assert false, 'accepted an empty salt'
 }
 
+fn test_derive_credentials_rejects_an_iteration_count_above_the_wire_limit() {
+	derive_credentials(.sha256, 'pencil', 'salt'.bytes(), max_wire_iterations + 1) or {
+		assert err.msg().contains('must not exceed ${max_wire_iterations}')
+		return
+	}
+	assert false, 'derived credentials with an iteration count outside the wire grammar'
+}
+
 fn test_generated_nonces_are_unique_and_printable() {
 	mut seen := map[string]bool{}
 	for _ in 0 .. 256 {

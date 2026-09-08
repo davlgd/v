@@ -192,6 +192,25 @@ fn test_incomplete_credentials_are_refused() {
 	}
 }
 
+fn test_stored_iteration_count_must_fit_the_wire_grammar() {
+	base := pencil_credentials(.sha256)
+	creds := Credentials{
+		...base
+		iterations: max_wire_iterations + 1
+	}
+	mut server := new_server(
+		lookup: fn [creds] (username string) !Credentials {
+			return creds
+		}
+	)!
+	mut client := new_client(username: 'user', password: 'pencil')!
+	server.first(client.first()!) or {
+		assert err.msg().contains('above the SCRAM wire maximum of ${max_wire_iterations}')
+		return
+	}
+	assert false, 'sent an iteration count that the SCRAM grammar cannot represent'
+}
+
 fn test_the_steps_must_be_called_in_order() {
 	mut server := server_for(.sha256, ChannelBinding{})
 	server.final('c=biws,r=x,p=y') or {

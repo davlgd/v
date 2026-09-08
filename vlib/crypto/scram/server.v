@@ -206,6 +206,9 @@ pub fn (mut s Server) first(client_first string) !string {
 	if credentials.salt.len == 0 || credentials.iterations < 1 {
 		return error('scram: the stored credentials for `${username}` are incomplete')
 	}
+	if credentials.iterations > max_wire_iterations {
+		return error('scram: the stored credentials for `${username}` use ${credentials.iterations} iterations, above the SCRAM wire maximum of ${max_wire_iterations}')
+	}
 	// Keys of the wrong length would fail the proof check further down, which
 	// reports a wrong password: a misconfigured store must not be diagnosed as
 	// a user typing the wrong thing.
