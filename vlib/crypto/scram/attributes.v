@@ -187,9 +187,11 @@ struct Attribute {
 	value string
 }
 
-// is_server_error_value checks the extension alphabet of RFC 5802 §7.
+// is_server_error_value checks the general `value` production that RFC 5802
+// §7 uses for extension errors.
 fn is_server_error_value(value string) bool {
-	return value != '' && value.bytes().all(it.is_alnum() || it in [`.`, `-`, `_`])
+	return value != '' && !value.contains('\0') && !value.contains(',')
+		&& validate.utf8_string(value)
 }
 
 // parse_attributes splits a SCRAM message into its attributes. Values are

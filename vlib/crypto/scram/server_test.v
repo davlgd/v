@@ -444,11 +444,14 @@ fn test_different_binding_data_is_refused() {
 fn test_server_error_message_renders_a_refusal() {
 	assert server_error_message('invalid-proof') == 'e=invalid-proof'
 	assert server_error_message('unknown-user') == 'e=unknown-user'
-	assert server_error_message('AZaz09.-_') == 'e=AZaz09.-_'
+	for code in ['AZaz09.-_', 'has=equals', 'has space', 'café'] {
+		assert server_error_message(code) == 'e=${code}', code
+	}
 	// A code that would break the grammar is replaced rather than emitted.
-	for code in ['', 'has,comma', 'has=equals', 'has space', 'control\0byte', 'café'] {
+	for code in ['', 'has,comma', 'control\0byte'] {
 		assert server_error_message(code) == 'e=other-error', code
 	}
+	assert server_error_message([u8(0xff)].bytestr()) == 'e=other-error'
 }
 
 fn test_a_refusal_travels_to_the_client() {

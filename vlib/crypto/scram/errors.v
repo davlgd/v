@@ -59,7 +59,8 @@ pub fn (e &UnsupportedMechanism) msg() string {
 // ServerError carries the `e=` attribute of a server-final-message, which is
 // how a server reports a refusal instead of signing the exchange. RFC 5802
 // §7 defines the values, `invalid-proof` and `unknown-user` being the common
-// ones, but a server may send any token, so do not assume the set is closed.
+// ones, but a server may send any valid extension value, so do not assume the
+// set is closed.
 pub struct ServerError {
 	Error
 pub:

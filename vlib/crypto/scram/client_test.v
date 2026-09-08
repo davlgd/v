@@ -276,16 +276,19 @@ fn test_a_server_refusal_surfaces_as_a_server_error() {
 	assert false, 'a server refusal was treated as a success'
 }
 
-fn test_an_invalid_server_refusal_is_malformed() {
-	for code in ['has space', 'has=equals', 'control\0byte', 'café'] {
+fn test_extension_server_refusals_accept_the_full_value_alphabet() {
+	for code in ['rate_limit', 'has=equals', 'has space', 'café'] {
 		mut client := rfc_client()
 		client.first()!
 		client.final(rfc_server_first)!
 		client.verify('e=${code}') or {
-			assert err is MalformedMessage, code
+			assert err is ServerError, code
+			if err is ServerError {
+				assert err.code == code
+			}
 			continue
 		}
-		assert false, 'accepted the invalid server error `${code}`'
+		assert false, 'a server refusal was treated as a success'
 	}
 }
 
