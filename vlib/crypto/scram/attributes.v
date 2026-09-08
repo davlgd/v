@@ -205,7 +205,7 @@ fn parse_attributes(message string) ![]Attribute {
 	mut out := []Attribute{cap: parts.len}
 	mut seen := [256]bool{}
 	for part in parts {
-		if part.len < 2 || part[1] != `=` {
+		if part.len < 3 || part[1] != `=` {
 			return MalformedMessage{
 				reason: 'expected a `key=value` attribute, got `${part}`'
 			}

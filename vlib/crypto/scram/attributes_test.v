@@ -82,10 +82,12 @@ fn test_parse_attributes_keeps_equals_signs_in_extension_values() {
 	assert attrs[0].key == `x` && attrs[0].value == 'a=b'
 }
 
-fn test_parse_attributes_accepts_an_empty_extension_value() {
-	attrs := parse_attributes('x=')!
-	assert attrs.len == 1
-	assert attrs[0].key == `x` && attrs[0].value == ''
+fn test_parse_attributes_refuses_an_empty_extension_value() {
+	parse_attributes('x=') or {
+		assert err is MalformedMessage
+		return
+	}
+	assert false, 'accepted an empty extension value'
 }
 
 fn test_parse_attributes_accepts_a_utf8_extension_value() {
