@@ -199,13 +199,15 @@ with. Without it a stripped advertisement goes undetected.
 
 ## Security notes
 
-**Normalisation.** RFC 5802 passes passwords and user names through
-SASLprep (RFC 4013). V has no stringprep implementation, so this module
-hashes the password bytes it is given; normalise non-ASCII passwords before
-calling, or two equivalent spellings will disagree. On the server, supply
-`ServerConfig.prepare_username` to apply SASLprep before credential lookup.
-Without that callback the server accepts only printable ASCII user names,
-whose SASLprep form is unchanged, and rejects non-ASCII or control characters.
+**Normalisation.** SCRAM-SHA-1 passes passwords through SASLprep (RFC 4013),
+while SCRAM-SHA-256 uses the PRECIS OpaqueString profile (RFC 8265). V implements
+neither profile, so this module hashes the password bytes it is given. Prepare
+non-ASCII passwords with the profile for the selected mechanism before calling,
+or two equivalent spellings can disagree. User names use SASLprep (RFC 4013).
+On the server, supply `ServerConfig.prepare_username` to apply it before
+credential lookup. Without that callback the server accepts only printable
+ASCII user names, whose SASLprep form is unchanged, and rejects non-ASCII or
+control characters.
 
 **Iteration count.** A client refuses a server asking for fewer than
 `default_min_iterations` (4096, the floor in RFC 7677 §4), because a low
