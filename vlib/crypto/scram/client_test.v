@@ -22,6 +22,18 @@ fn test_new_client_rejects_an_empty_username() {
 	assert false, 'accepted an empty username'
 }
 
+fn test_new_client_rejects_nul_bytes_in_sasl_names() {
+	new_client(username: 'nul\0name', password: 'pencil') or {
+		assert err.msg().contains('must not contain a NUL byte')
+		new_client(username: 'user', password: 'pencil', authzid: 'nul\0authzid') or {
+			assert err.msg().contains('must not contain a NUL byte')
+			return
+		}
+		assert false, 'accepted a NUL byte in the authorization identity'
+	}
+	assert false, 'accepted a NUL byte in the username'
+}
+
 fn test_new_client_rejects_an_unusable_nonce() {
 	// An empty `nonce` is the documented request for a generated one, so the
 	// unusable values are the ones that would break the message grammar.

@@ -85,6 +85,7 @@ pub fn new_client(config ClientConfig) !&Client {
 	if config.username == '' {
 		return error('scram: the username must not be empty')
 	}
+	escape_saslname(config.username)!
 	if config.min_iterations < 1 {
 		return error('scram: min_iterations must be at least 1, got ${config.min_iterations}')
 	}
@@ -135,7 +136,7 @@ pub fn (mut c Client) first() !string {
 	if c.state != .awaiting_first {
 		return error('scram: first() must be called exactly once, at the start of the exchange')
 	}
-	c.first_bare = 'n=${escape_saslname(c.username)},r=${c.client_nonce}'
+	c.first_bare = 'n=${escape_saslname(c.username)!},r=${c.client_nonce}'
 	c.state = .awaiting_server_first
 	return '${c.gs2_header}${c.first_bare}'
 }
@@ -241,6 +242,11 @@ pub fn (mut c Client) verify(server_final string) ! {
 	if attrs[0].key != `v` {
 		return MalformedMessage{
 			reason: 'the server-final-message must start with `v=` or `e=`'
+		}
+	}
+	if attrs[0].value == '' {
+		return MalformedMessage{
+			reason: 'the server signature must not be empty'
 		}
 	}
 	signature := decode_base64(attrs[0].value, 'the server signature')!

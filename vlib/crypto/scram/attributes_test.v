@@ -2,24 +2,32 @@
 module scram
 
 fn test_escape_saslname_escapes_only_what_the_grammar_forbids() {
-	assert escape_saslname('user') == 'user'
-	assert escape_saslname('') == ''
-	assert escape_saslname('a,b') == 'a=2Cb'
-	assert escape_saslname('a=b') == 'a=3Db'
-	assert escape_saslname('a,b=c') == 'a=2Cb=3Dc'
-	assert escape_saslname(',') == '=2C'
-	assert escape_saslname('=') == '=3D'
+	assert escape_saslname('user')! == 'user'
+	assert escape_saslname('')! == ''
+	assert escape_saslname('a,b')! == 'a=2Cb'
+	assert escape_saslname('a=b')! == 'a=3Db'
+	assert escape_saslname('a,b=c')! == 'a=2Cb=3Dc'
+	assert escape_saslname(',')! == '=2C'
+	assert escape_saslname('=')! == '=3D'
 	// An equals sign must be escaped before a comma, otherwise the `=` of the
 	// `=2C` produced for the comma would be escaped in turn.
-	assert escape_saslname('=,') == '=3D=2C'
-	assert escape_saslname('=2C') == '=3D2C'
+	assert escape_saslname('=,')! == '=3D=2C'
+	assert escape_saslname('=2C')! == '=3D2C'
 	// Non-ASCII passes through: the grammar is defined over UTF-8 octets.
-	assert escape_saslname('rené') == 'rené'
+	assert escape_saslname('rené')! == 'rené'
+}
+
+fn test_escape_saslname_refuses_a_nul_byte() {
+	escape_saslname('nul\0name') or {
+		assert err.msg().contains('must not contain a NUL byte')
+		return
+	}
+	assert false, 'accepted a NUL byte in a SASL name'
 }
 
 fn test_unescape_saslname_reverses_escape_saslname() {
 	for name in ['user', '', 'a,b', 'a=b', 'a,b=c', ',', '=', '=,', '=2C', 'rené', '=3D=2C=3D'] {
-		assert unescape_saslname(escape_saslname(name))! == name, name
+		assert unescape_saslname(escape_saslname(name)!)! == name, name
 	}
 }
 
@@ -31,6 +39,7 @@ fn test_unescape_saslname_refuses_anything_it_did_not_produce() {
 		'a nearly truncated one':      'ab=2'
 		'a raw comma':                 'a,b'
 		'a raw comma after an escape': '=2C,'
+		'a NUL byte':                  'nul\0name'
 	}
 	for what, name in cases {
 		unescape_saslname(name) or {
@@ -56,6 +65,12 @@ fn test_parse_attributes_keeps_equals_signs_inside_values() {
 	assert attrs[0].value == 'dGVzdA=='
 }
 
+fn test_parse_attributes_accepts_an_empty_extension_value() {
+	attrs := parse_attributes('x=')!
+	assert attrs.len == 1
+	assert attrs[0].key == `x` && attrs[0].value == ''
+}
+
 fn test_parse_attributes_refuses_duplicate_names() {
 	for message in ['r=one,r=two', 'r=one,s=c2FsdA==,r=two'] {
 		parse_attributes(message) or {
@@ -67,11 +82,19 @@ fn test_parse_attributes_refuses_duplicate_names() {
 	}
 }
 
+fn test_parse_attributes_refuses_a_nonleading_mandatory_extension() {
+	parse_attributes('r=nonce,m=feature') or {
+		assert err is MalformedMessage
+		assert err.msg().contains('mandatory extension attribute `m=` must be first')
+		return
+	}
+	assert false, 'accepted a non-leading mandatory extension'
+}
+
 fn test_parse_attributes_refuses_malformed_input() {
 	cases := {
 		'an empty message':       ''
 		'no equals sign':         'abc'
-		'an empty value':         'r='
 		'a long name':            'rr=abc'
 		'a digit as a name':      '1=abc'
 		'a punctuation name':     '-=abc'

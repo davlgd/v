@@ -81,7 +81,7 @@ fn (cb ChannelBinding) gs2_header(authzid string) !string {
 	if authzid == '' {
 		return '${flag},,'
 	}
-	return '${flag},a=${escape_saslname(authzid)},'
+	return '${flag},a=${escape_saslname(authzid)!},'
 }
 
 // cbind_input returns the value the `c=` attribute base64 encodes: the GS2
@@ -97,7 +97,10 @@ fn (cb ChannelBinding) cbind_input(gs2_header string) []u8 {
 // escape_saslname applies the `saslname` escaping of RFC 5802 §5.1. A comma
 // would end the attribute, so it becomes `=2C`; the equals sign that
 // introduces the escape becomes `=3D`.
-fn escape_saslname(name string) string {
+fn escape_saslname(name string) !string {
+	if name.contains('\0') {
+		return error('scram: a SASL name must not contain a NUL byte')
+	}
 	if !name.contains_any('=,') {
 		return name
 	}
@@ -118,6 +121,11 @@ fn escape_saslname(name string) string {
 // invalid per RFC 5802 §5.1 and is rejected rather than passed through, so a
 // peer cannot smuggle a name past a check by inventing an escape.
 fn unescape_saslname(name string) !string {
+	if name.contains('\0') {
+		return MalformedMessage{
+			reason: 'a SASL name must not contain a NUL byte'
+		}
+	}
 	if !name.contains('=') {
 		if name.contains(',') {
 			return MalformedMessage{
@@ -188,7 +196,7 @@ fn parse_attributes(message string) ![]Attribute {
 	mut out := []Attribute{cap: parts.len}
 	mut seen := [256]bool{}
 	for part in parts {
-		if part.len < 3 || part[1] != `=` {
+		if part.len < 2 || part[1] != `=` {
 			return MalformedMessage{
 				reason: 'expected a `key=value` attribute, got `${part}`'
 			}
@@ -196,6 +204,11 @@ fn parse_attributes(message string) ![]Attribute {
 		if !part[0].is_letter() {
 			return MalformedMessage{
 				reason: 'attribute names must be letters, got `${part[0].ascii_str()}`'
+			}
+		}
+		if part[0] == `m` && out.len > 0 {
+			return MalformedMessage{
+				reason: 'the mandatory extension attribute `m=` must be first'
 			}
 		}
 		if seen[part[0]] {
