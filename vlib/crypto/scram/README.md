@@ -77,8 +77,8 @@ fn main() {
 Use `derive_credentials` instead when the salt and iteration count are
 imposed, for instance to reproduce a record another implementation wrote.
 
-`encode` and `parse_credentials` turn a record into one line and back, in
-the format of RFC 5803 laid out in the `authPassword` syntax of RFC 3112:
+`encode` and `parse_credentials` turn a record into this one-line format and
+back:
 
 ```v
 import crypto.scram
@@ -92,11 +92,13 @@ fn main() {
 }
 ```
 
-For SCRAM-SHA-256, that is also the layout PostgreSQL stores in
-`pg_authid.rolpassword`, so a SHA-256 record written here can be read by a
-PostgreSQL server or an LDAP directory, and the other way round. PostgreSQL
-does not accept SCRAM-SHA-1 or SCRAM-SHA-512 records. Treat the line as a
-secret: the server key in it is enough to impersonate the server to that user.
+For SCRAM-SHA-1, this is the RFC 5803 `authPassword` scheme laid out in the
+syntax of RFC 3112 and can interoperate with LDAP implementations of that RFC.
+For SCRAM-SHA-256, it is the layout PostgreSQL stores in
+`pg_authid.rolpassword`. PostgreSQL does not accept SCRAM-SHA-1 or
+SCRAM-SHA-512 records, while RFC 5803 does not define SCRAM-SHA-256 or
+SCRAM-SHA-512 records for LDAP. Treat the line as a secret: the server key in
+it is enough to impersonate the server to that user.
 
 Printing is safe by default. `Client`, `Server` and `Credentials` define
 their own `str()`, so a `println(client)` while debugging shows the state

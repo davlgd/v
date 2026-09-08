@@ -268,15 +268,16 @@ pub fn new_credentials(mechanism Mechanism, password string) !Credentials {
 	return derive_credentials(mechanism, password, salt, default_iterations)!
 }
 
-// encode renders the credentials in the storage format of RFC 5803, laid out
-// in the `authPassword` syntax of RFC 3112 §2:
+// encode renders the credentials in this one-line storage format:
 //
 //     <mechanism> "$" <iterations> ":" <salt> "$" <stored key> ":" <server key>
 //
-// with the three binary fields in base64. For `.sha256`, it is also the format
-// PostgreSQL keeps in `pg_authid.rolpassword`, so a SHA-256 record written here
-// can be read by an LDAP directory or a PostgreSQL server, and vice versa.
-// PostgreSQL does not accept the `.sha1` or `.sha512` records.
+// with the three binary fields in base64. For `.sha1`, this is the RFC 5803
+// `authPassword` scheme laid out in the syntax of RFC 3112 §2 and can
+// interoperate with LDAP implementations of that RFC. For `.sha256`, it is
+// the format PostgreSQL keeps in `pg_authid.rolpassword`. PostgreSQL does not
+// accept the `.sha1` or `.sha512` records, and RFC 5803 does not define the
+// `.sha256` or `.sha512` records for LDAP.
 //
 // The result is a secret: `server_key` lets its holder impersonate the
 // server to any client of this user.
@@ -293,10 +294,11 @@ pub fn (c Credentials) encode() string {
 	return '${c.mechanism.name()}\$${c.iterations}:${base64.encode(c.salt)}\$${base64.encode(c.stored_key)}:${base64.encode(c.server_key)}'
 }
 
-// parse_credentials reads back what `Credentials.encode` wrote, and with it
-// any RFC 5803 record. Every field is validated, including the key lengths
-// against the mechanism, so a truncated or hand-edited record is rejected
-// rather than silently producing an account nobody can log into.
+// parse_credentials reads back what `Credentials.encode` wrote, including
+// RFC 5803 SCRAM-SHA-1 records and PostgreSQL SCRAM-SHA-256 records. Every
+// field is validated, including the key lengths against the mechanism, so a
+// truncated or hand-edited record is rejected rather than silently producing
+// an account nobody can log into.
 pub fn parse_credentials(encoded string) !Credentials {
 	fields := encoded.split('\$')
 	if fields.len != 3 {
