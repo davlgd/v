@@ -35,12 +35,12 @@ pub:
 	// lookup returns the credentials stored for `username`, which arrives
 	// already unescaped and prepared.
 	//
-	// Returning an error aborts the exchange; the caller should then answer
-	// `server_error_message('unknown-user')`. Note that doing so tells an
-	// attacker which user names exist. RFC 5802 §7 suggests answering unknown
-	// users with credentials derived from a server-side secret instead, so
-	// that they are indistinguishable from a wrong password — that policy
-	// belongs to the application, which is why it lives in this callback.
+	// Returning an error aborts the exchange before a server challenge exists;
+	// report that through the enclosing SASL protocol, not as a SCRAM
+	// server-final-message. To avoid revealing which user names exist, RFC 5802
+	// §7 suggests returning credentials derived from a server-side secret for
+	// unknown users and continuing the exchange. That policy belongs to the
+	// application, which is why it lives in this callback.
 	lookup fn (username string) !Credentials @[required]
 }
 
