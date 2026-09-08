@@ -92,10 +92,11 @@ fn main() {
 }
 ```
 
-That is the same layout PostgreSQL stores in `pg_authid.rolpassword`, so a
-record written here can be read by a PostgreSQL server or an LDAP
-directory, and the other way round. Treat the line as a secret: the server
-key in it is enough to impersonate the server to that user.
+For SCRAM-SHA-256, that is also the layout PostgreSQL stores in
+`pg_authid.rolpassword`, so a SHA-256 record written here can be read by a
+PostgreSQL server or an LDAP directory, and the other way round. PostgreSQL
+does not accept SCRAM-SHA-1 or SCRAM-SHA-512 records. Treat the line as a
+secret: the server key in it is enough to impersonate the server to that user.
 
 Printing is safe by default. `Client`, `Server` and `Credentials` define
 their own `str()`, so a `println(client)` while debugging shows the state

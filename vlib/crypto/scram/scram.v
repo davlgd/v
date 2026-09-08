@@ -273,9 +273,10 @@ pub fn new_credentials(mechanism Mechanism, password string) !Credentials {
 //
 //     <mechanism> "$" <iterations> ":" <salt> "$" <stored key> ":" <server key>
 //
-// with the three binary fields in base64. It is the format PostgreSQL keeps
-// in `pg_authid.rolpassword`, so a record written here can be read by an
-// LDAP directory or a PostgreSQL server, and vice versa.
+// with the three binary fields in base64. For `.sha256`, it is also the format
+// PostgreSQL keeps in `pg_authid.rolpassword`, so a SHA-256 record written here
+// can be read by an LDAP directory or a PostgreSQL server, and vice versa.
+// PostgreSQL does not accept the `.sha1` or `.sha512` records.
 //
 // The result is a secret: `server_key` lets its holder impersonate the
 // server to any client of this user.
