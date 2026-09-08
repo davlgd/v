@@ -94,6 +94,9 @@ pub fn new_client(config ClientConfig) !&Client {
 	if config.min_iterations < 1 {
 		return error('scram: min_iterations must be at least 1, got ${config.min_iterations}')
 	}
+	if config.min_iterations > max_wire_iterations {
+		return error('scram: min_iterations must not exceed the SCRAM wire maximum of ${max_wire_iterations}, got ${config.min_iterations}')
+	}
 	if config.max_iterations < config.min_iterations {
 		return error('scram: max_iterations (${config.max_iterations}) must not be below min_iterations (${config.min_iterations})')
 	}

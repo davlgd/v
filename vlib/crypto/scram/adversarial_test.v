@@ -170,6 +170,19 @@ fn test_a_ceiling_below_the_floor_is_refused_at_construction() {
 	assert false, 'accepted a ceiling below the floor'
 }
 
+fn test_an_iteration_floor_above_the_wire_maximum_is_refused_at_construction() {
+	new_client(
+		username:       'user'
+		password:       'pencil'
+		min_iterations: max_wire_iterations + 1
+		max_iterations: max_wire_iterations + 1
+	) or {
+		assert err.msg().contains('must not exceed the SCRAM wire maximum of ${max_wire_iterations}')
+		return
+	}
+	assert false, 'accepted an iteration floor above the SCRAM wire maximum'
+}
+
 fn test_a_count_between_the_floor_and_the_ceiling_is_still_accepted() {
 	credentials := derive_credentials(.sha256, 'pencil', 'saltsaltsaltsalt'.bytes(),
 		default_iterations)!
