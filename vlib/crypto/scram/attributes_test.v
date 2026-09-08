@@ -139,7 +139,8 @@ fn test_gs2_header_rendering() {
 }
 
 fn test_gs2_header_refuses_an_unusable_binding_name() {
-	for name in ['', 'has,comma', 'has=equals'] {
+	for name in ['', 'has,comma', 'has=equals', 'has space', 'has_underscore', 'control\0byte',
+		'café'] {
 		binding := ChannelBinding{
 			mode: .required
 			name: name
@@ -148,6 +149,15 @@ fn test_gs2_header_refuses_an_unusable_binding_name() {
 		binding.gs2_header('') or { continue }
 		assert false, 'accepted the channel binding name `${name}`'
 	}
+}
+
+fn test_gs2_header_accepts_the_complete_binding_name_alphabet() {
+	binding := ChannelBinding{
+		mode: .required
+		name: 'AZaz09.-'
+		data: [u8(1)]
+	}
+	assert binding.gs2_header('')! == 'p=AZaz09.-,,'
 }
 
 fn test_cbind_input_appends_data_only_when_bound() {

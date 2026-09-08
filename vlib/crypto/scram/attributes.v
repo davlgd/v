@@ -58,8 +58,8 @@ fn (cb ChannelBinding) gs2_flag() !string {
 			if cb.name == '' {
 				return error('scram: a channel binding name is required when mode is .required')
 			}
-			if cb.name.contains(',') || cb.name.contains('=') {
-				return error('scram: the channel binding name must not contain a comma or an equals sign')
+			if !cb.name.bytes().all(it.is_alnum() || it == `.` || it == `-`) {
+				return error('scram: the channel binding name must only contain ASCII letters, digits, dots, and hyphens')
 			}
 			// Without data there is nothing to bind to, yet the exchange would
 			// still announce a `-PLUS` mechanism and succeed against a peer that
