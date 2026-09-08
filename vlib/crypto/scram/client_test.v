@@ -289,6 +289,21 @@ fn test_an_invalid_server_refusal_is_malformed() {
 	}
 }
 
+fn test_a_server_final_message_cannot_contain_a_verifier_and_an_error() {
+	for server_final in ['${rfc_server_final},e=invalid-proof', 'e=invalid-proof,${rfc_server_final}'] {
+		mut client := rfc_client()
+		client.first()!
+		client.final(rfc_server_first)!
+		client.verify(server_final) or {
+			assert err is MalformedMessage, server_final
+			assert err.msg().contains('must not contain both `v=` and `e=`'), server_final
+			assert !client.done()
+			continue
+		}
+		assert false, 'accepted conflicting server-final attributes `${server_final}`'
+	}
+}
+
 fn test_a_malformed_server_final_message_is_refused() {
 	for server_final in ['', 'garbage', 'x=something', 'v=not!base64', 'v='] {
 		mut client := rfc_client()

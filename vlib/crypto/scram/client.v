@@ -233,6 +233,17 @@ pub fn (mut c Client) verify(server_final string) ! {
 	}
 	c.state = .failed
 	attrs := parse_attributes(server_final)!
+	mut has_verifier := false
+	mut has_error := false
+	for attr in attrs {
+		has_verifier = has_verifier || attr.key == `v`
+		has_error = has_error || attr.key == `e`
+	}
+	if has_verifier && has_error {
+		return MalformedMessage{
+			reason: 'the server-final-message must not contain both `v=` and `e=`'
+		}
+	}
 	if attrs[0].key == `e` {
 		if !is_server_error_value(attrs[0].value) {
 			return MalformedMessage{
