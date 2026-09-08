@@ -234,6 +234,28 @@ fn parse_attributes(message string) ![]Attribute {
 // not canonical base64. `base64.decode` reports no error of its own, so the
 // check is a round trip: only a canonical encoding survives it unchanged.
 fn decode_base64(value string, what string) ![]u8 {
+	if value.len % 4 != 0 {
+		return MalformedMessage{
+			reason: '${what} is not valid base64'
+		}
+	}
+	mut padding := 0
+	for i, c in value {
+		if c == `=` {
+			padding++
+			if i < value.len - 2 || padding > 2 {
+				return MalformedMessage{
+					reason: '${what} is not valid base64'
+				}
+			}
+			continue
+		}
+		if padding > 0 || !(c.is_alnum() || c == `+` || c == `/`) {
+			return MalformedMessage{
+				reason: '${what} is not valid base64'
+			}
+		}
+	}
 	decoded := base64.decode(value)
 	if base64.encode(decoded) != value {
 		return MalformedMessage{

@@ -35,7 +35,8 @@ returning the message to send back.
 ### Authenticating against a server
 
 This is the case you want most of the time. Everything the transport has
-to do is carry four opaque ASCII strings.
+to do is carry four opaque SCRAM payloads. They can contain UTF-8 user or
+authorization identities, so preserve their bytes without re-encoding them.
 
 ```v ignore
 import crypto.scram
@@ -202,12 +203,13 @@ with. Without it a stripped advertisement goes undetected.
 **Normalisation.** SCRAM-SHA-1 passes passwords through SASLprep (RFC 4013),
 while SCRAM-SHA-256 uses the PRECIS OpaqueString profile (RFC 8265). V implements
 neither profile, so this module hashes the password bytes it is given. Prepare
-non-ASCII passwords with the profile for the selected mechanism before calling,
-or two equivalent spellings can disagree. User names use SASLprep (RFC 4013).
-On the server, supply `ServerConfig.prepare_username` to apply it before
-credential lookup. Without that callback the server accepts only printable
-ASCII user names, whose SASLprep form is unchanged, and rejects non-ASCII or
-control characters.
+and validate every password, including ASCII input, with the profile for the
+selected mechanism before calling. Preparation rejects prohibited characters
+and ensures equivalent spellings do not disagree. User names use SASLprep
+(RFC 4013). On the server, supply `ServerConfig.prepare_username` to apply it
+before credential lookup. Without that callback the server accepts only
+printable ASCII user names, whose SASLprep form is unchanged, and rejects
+non-ASCII or control characters.
 
 **Iteration count.** A client refuses a server asking for fewer than
 `default_min_iterations` (4096, the floor in RFC 7677 §4), because a low
