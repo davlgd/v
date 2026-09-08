@@ -74,6 +74,14 @@ fn test_parse_attributes_keeps_equals_signs_inside_values() {
 	assert attrs[0].value == 'dGVzdA=='
 }
 
+fn test_parse_attributes_keeps_equals_signs_in_extension_values() {
+	// RFC 5802 §7 defines value-char as value-safe-char or `=`, and uses
+	// that value production for extension attributes.
+	attrs := parse_attributes('x=a=b')!
+	assert attrs.len == 1
+	assert attrs[0].key == `x` && attrs[0].value == 'a=b'
+}
+
 fn test_parse_attributes_accepts_an_empty_extension_value() {
 	attrs := parse_attributes('x=')!
 	assert attrs.len == 1
