@@ -248,6 +248,10 @@ pub fn derive_credentials(mechanism Mechanism, password string, salt []u8, itera
 // with a freshly generated random salt of `default_salt_size` bytes and
 // `default_iterations` iterations.
 //
+// Prepare and validate the password before calling: SASLprep for `.sha1`,
+// PRECIS OpaqueString for `.sha256`, and the profile agreed with the peer for
+// `.sha512`. This function hashes the supplied bytes unchanged.
+//
 // Example:
 // ```v
 // credentials := scram.new_credentials(.sha256, 'pencil')!

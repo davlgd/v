@@ -25,6 +25,15 @@ fn test_escape_saslname_refuses_a_nul_byte() {
 	assert false, 'accepted a NUL byte in a SASL name'
 }
 
+fn test_escape_saslname_refuses_invalid_utf8() {
+	name := [u8(0xff)].bytestr()
+	escape_saslname(name) or {
+		assert err.msg().contains('must contain valid UTF-8')
+		return
+	}
+	assert false, 'accepted invalid UTF-8 in a SASL name'
+}
+
 fn test_unescape_saslname_reverses_escape_saslname() {
 	for name in ['user', '', 'a,b', 'a=b', 'a,b=c', ',', '=', '=,', '=2C', 'rené', '=3D=2C=3D'] {
 		assert unescape_saslname(escape_saslname(name)!)! == name, name
@@ -258,6 +267,17 @@ fn test_split_gs2_header_separates_the_three_parts() {
 	assert header3 == 'p=tls-exporter,a=a=2Cb,'
 	assert authzid3 == 'a,b'
 	assert bare3 == 'n=user,r=abc'
+}
+
+fn test_split_gs2_header_refuses_invalid_utf8_authzid() {
+	client_first := [u8(`n`), `,`, `a`, `=`, 0xff, `,`, `n`, `=`, `u`, `s`, `e`, `r`, `,`,
+		`r`, `=`, `a`, `b`, `c`].bytestr()
+	split_gs2_header(client_first) or {
+		assert err is MalformedMessage
+		assert err.msg().contains('must contain valid UTF-8')
+		return
+	}
+	assert false, 'accepted invalid UTF-8 in a GS2 authorization identity'
 }
 
 fn test_split_gs2_header_refuses_a_broken_header() {

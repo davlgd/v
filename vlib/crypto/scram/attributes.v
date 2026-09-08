@@ -102,6 +102,9 @@ fn escape_saslname(name string) !string {
 	if name.contains('\0') {
 		return error('scram: a SASL name must not contain a NUL byte')
 	}
+	if !validate.utf8_string(name) {
+		return error('scram: a SASL name must contain valid UTF-8')
+	}
 	if !name.contains_any('=,') {
 		return name
 	}
@@ -125,6 +128,11 @@ fn unescape_saslname(name string) !string {
 	if name.contains('\0') {
 		return MalformedMessage{
 			reason: 'a SASL name must not contain a NUL byte'
+		}
+	}
+	if !validate.utf8_string(name) {
+		return MalformedMessage{
+			reason: 'a SASL name must contain valid UTF-8'
 		}
 	}
 	if !name.contains('=') {
