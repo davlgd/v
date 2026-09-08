@@ -28,8 +28,12 @@ pub:
 	// nonce overrides the generated server nonce. Leave it empty outside of
 	// tests.
 	nonce string
+	// prepare_username applies SASLprep (RFC 4013) to the authentication identity
+	// before `lookup`. When omitted, the server accepts only printable ASCII,
+	// whose SASLprep form is unchanged; non-ASCII identities require a callback.
+	prepare_username fn (username string) !string = unsafe { nil }
 	// lookup returns the credentials stored for `username`, which arrives
-	// already unescaped.
+	// already unescaped and prepared.
 	//
 	// Returning an error aborts the exchange; the caller should then answer
 	// `server_error_message('unknown-user')`. Note that doing so tells an
@@ -60,6 +64,7 @@ pub struct Server {
 	advertises_plus bool
 	server_nonce    string
 	lookup          fn (username string) !Credentials = unsafe { nil }
+	prepare_username fn (username string) !string = unsafe { nil }
 mut:
 	username     string
 	authzid      string
@@ -92,7 +97,21 @@ pub fn new_server(config ServerConfig) !&Server {
 		advertises_plus: config.advertises_plus || config.channel_binding.mode == .required
 		server_nonce:    nonce
 		lookup:          config.lookup
+		prepare_username: if config.prepare_username == unsafe { nil } {
+			prepare_ascii_username
+		} else {
+			config.prepare_username
+		}
 	}
+}
+
+fn prepare_ascii_username(username string) !string {
+	for c in username.bytes() {
+		if c < ` ` || c > `~` {
+			return error('non-ASCII and control characters require ServerConfig.prepare_username with SASLprep')
+		}
+	}
+	return username
 }
 
 // str renders a Server without its secrets, for the same reason as
@@ -111,7 +130,7 @@ pub fn (s &Server) mechanism_name() string {
 	return s.mechanism.name()
 }
 
-// username returns the authentication identity the client sent, unescaped.
+// username returns the authentication identity the client sent, unescaped and prepared.
 // It is only meaningful once `first` has returned, and only trustworthy once
 // `final` has succeeded.
 pub fn (s &Server) username() string {
@@ -163,7 +182,12 @@ pub fn (mut s Server) first(client_first string) !string {
 			reason: 'the client-first-message must be `n=`, then `r=`'
 		}
 	}
-	username := unescape_saslname(attrs[0].value)!
+	wire_username := unescape_saslname(attrs[0].value)!
+	username := s.prepare_username(wire_username) or {
+		return MalformedMessage{
+			reason: 'invalid user name: ${err.msg()}'
+		}
+	}
 	if username == '' {
 		return MalformedMessage{
 			reason: 'the user name must not be empty'

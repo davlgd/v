@@ -91,6 +91,38 @@ fn test_a_full_exchange_carries_an_escaped_user_name() {
 	assert server.username() == 'a,b=c'
 }
 
+fn test_the_server_prepares_the_username_before_lookup() {
+	creds := pencil_credentials(.sha256)
+	mut server := new_server(
+		nonce: 'servernonce'
+		prepare_username: fn (username string) !string {
+			return username.replace('\u00ad', '')
+		}
+		lookup: fn [creds] (username string) !Credentials {
+			assert username == 'IX'
+			return creds
+		}
+	)!
+	server.first('n,,n=I\u00adX,r=clientnonce')!
+	assert server.username() == 'IX'
+}
+
+fn test_the_server_rejects_unprepared_non_ascii_usernames_by_default() {
+	creds := pencil_credentials(.sha256)
+	mut server := new_server(
+		nonce:  'servernonce'
+		lookup: fn [creds] (username string) !Credentials {
+			return creds
+		}
+	)!
+	server.first('n,,n=I\u00adX,r=clientnonce') or {
+		assert err is MalformedMessage
+		assert err.msg().contains('ServerConfig.prepare_username with SASLprep')
+		return
+	}
+	assert false, 'accepted an unprepared non-ASCII username'
+}
+
 fn test_a_wrong_password_is_refused() {
 	mut server := server_for(.sha256, ChannelBinding{})
 	mut client := new_client(username: 'user', password: 'crayon')!
