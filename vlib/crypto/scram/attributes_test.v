@@ -56,6 +56,17 @@ fn test_parse_attributes_keeps_equals_signs_inside_values() {
 	assert attrs[0].value == 'dGVzdA=='
 }
 
+fn test_parse_attributes_refuses_duplicate_names() {
+	for message in ['r=one,r=two', 'r=one,s=c2FsdA==,r=two'] {
+		parse_attributes(message) or {
+			assert err is MalformedMessage, message
+			assert err.msg().contains('duplicate `r=` attribute'), message
+			continue
+		}
+		assert false, 'accepted duplicate attributes in `${message}`'
+	}
+}
+
 fn test_parse_attributes_refuses_malformed_input() {
 	cases := {
 		'an empty message':       ''

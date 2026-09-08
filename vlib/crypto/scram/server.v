@@ -136,7 +136,7 @@ pub fn (s &Server) done() bool {
 // `unknown-user` and `invalid-encoding`; a client surfaces the value as a
 // `ServerError`.
 pub fn server_error_message(code string) string {
-	if code == '' || !code.bytes().all(it.is_alnum() || it in [`.`, `-`, `_`]) {
+	if !is_server_error_value(code) {
 		return 'e=other-error'
 	}
 	return 'e=${code}'

@@ -229,6 +229,11 @@ pub fn (mut c Client) verify(server_final string) ! {
 	c.state = .failed
 	attrs := parse_attributes(server_final)!
 	if attrs[0].key == `e` {
+		if !is_server_error_value(attrs[0].value) {
+			return MalformedMessage{
+				reason: 'the server error is not a valid token'
+			}
+		}
 		return ServerError{
 			code: attrs[0].value
 		}

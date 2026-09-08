@@ -88,20 +88,17 @@ fn test_an_empty_authzid_in_the_gs2_header_is_malformed() {
 	assert false, 'the server accepted an empty `a=` authorization identity'
 }
 
-fn test_an_attribute_injected_into_the_client_first_message_breaks_the_proof() {
-	// Nothing rejects a duplicate `r=` outright, because the whole message
-	// goes into the auth message on both sides. That is what has to hold: an
-	// injected attribute must make the exchange fail, not pass unnoticed.
+fn test_a_duplicate_attribute_in_the_client_first_message_is_malformed() {
 	credentials := derive_credentials(.sha256, 'pencil', 'saltsaltsaltsalt'.bytes(), 4096)!
 	mut server := server_with(credentials)!
 	mut client := new_client(username: 'user', password: 'pencil')!
 	client_first := client.first()!
-	server_first := server.first('${client_first},r=injected')!
-	server.final(client.final(server_first)!) or {
-		assert err is AuthenticationFailed
+	server.first('${client_first},r=injected') or {
+		assert err is MalformedMessage
+		assert err.msg().contains('duplicate `r=` attribute')
 		return
 	}
-	assert false, 'an attribute injected into the client-first-message went unnoticed'
+	assert false, 'the server accepted a duplicate `r=` attribute'
 }
 
 fn test_an_extension_injected_into_the_server_first_message_breaks_the_proof() {

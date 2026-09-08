@@ -170,6 +170,11 @@ struct Attribute {
 	value string
 }
 
+// is_server_error_value checks the extension alphabet of RFC 5802 §7.
+fn is_server_error_value(value string) bool {
+	return value != '' && value.bytes().all(it.is_alnum() || it in [`.`, `-`, `_`])
+}
+
 // parse_attributes splits a SCRAM message into its attributes. Values are
 // returned verbatim; a comma always separates attributes, because the
 // grammar of RFC 5802 §7 excludes it from every value.
@@ -181,6 +186,7 @@ fn parse_attributes(message string) ![]Attribute {
 	}
 	parts := message.split(',')
 	mut out := []Attribute{cap: parts.len}
+	mut seen := [256]bool{}
 	for part in parts {
 		if part.len < 3 || part[1] != `=` {
 			return MalformedMessage{
@@ -192,6 +198,12 @@ fn parse_attributes(message string) ![]Attribute {
 				reason: 'attribute names must be letters, got `${part[0].ascii_str()}`'
 			}
 		}
+		if seen[part[0]] {
+			return MalformedMessage{
+				reason: 'duplicate `${part[0].ascii_str()}=` attribute'
+			}
+		}
+		seen[part[0]] = true
 		out << Attribute{
 			key:   part[0]
 			value: part[2..]
