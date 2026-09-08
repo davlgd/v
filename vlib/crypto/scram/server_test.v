@@ -78,6 +78,37 @@ fn test_a_full_exchange_carries_the_authorization_identity() {
 	assert server.username() == 'user'
 }
 
+fn test_the_server_prepares_the_authorization_identity_before_exposing_it() {
+	creds := pencil_credentials(.sha256)
+	mut server := new_server(
+		nonce: 'servernonce'
+		prepare_authzid: fn (authzid string) !string {
+			return authzid.replace('\u00ad', '')
+		}
+		lookup: fn [creds] (username string) !Credentials {
+			return creds
+		}
+	)!
+	server.first('n,a=admin\u00adrole,n=user,r=clientnonce')!
+	assert server.authzid() == 'adminrole'
+}
+
+fn test_the_server_rejects_unprepared_non_ascii_authorization_identities_by_default() {
+	creds := pencil_credentials(.sha256)
+	mut server := new_server(
+		nonce:  'servernonce'
+		lookup: fn [creds] (username string) !Credentials {
+			return creds
+		}
+	)!
+	server.first('n,a=admin\u00adrole,n=user,r=clientnonce') or {
+		assert err is MalformedMessage
+		assert err.msg().contains('ServerConfig.prepare_authzid')
+		return
+	}
+	assert false, 'accepted an unprepared non-ASCII authorization identity'
+}
+
 fn test_a_full_exchange_carries_an_escaped_user_name() {
 	creds := pencil_credentials(.sha256)
 	mut server := new_server(

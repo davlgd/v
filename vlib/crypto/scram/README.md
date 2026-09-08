@@ -210,7 +210,11 @@ and ensures equivalent spellings do not disagree. User names use SASLprep
 (RFC 4013). On the server, supply `ServerConfig.prepare_username` to apply it
 before credential lookup. Without that callback the server accepts only
 printable ASCII user names, whose SASLprep form is unchanged, and rejects
-non-ASCII or control characters.
+non-ASCII or control characters. Prepare a client's authorization identity
+with the application protocol's profile before sending it. On the server,
+`ServerConfig.prepare_authzid` applies that profile to the untrusted peer value
+before `Server.authzid()` exposes it; without the callback, only printable ASCII
+authorization identities are accepted.
 
 **Iteration count.** A client refuses a server asking for fewer than
 `default_min_iterations` (4096, the floor in RFC 7677 §4), because a low

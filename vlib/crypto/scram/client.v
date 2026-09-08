@@ -26,6 +26,7 @@ pub:
 	// survives only for servers that offer nothing better.
 	mechanism Mechanism = .sha256
 	// authzid is the authorization identity, when it differs from `username`.
+	// Prepare it with the application protocol's profile before passing it.
 	// Leave it empty in the common case where a user authenticates as itself.
 	authzid string
 	// channel_binding binds the exchange to the TLS channel underneath it.

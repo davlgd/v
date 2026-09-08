@@ -32,6 +32,11 @@ pub:
 	// before `lookup`. When omitted, the server accepts only printable ASCII,
 	// whose SASLprep form is unchanged; non-ASCII identities require a callback.
 	prepare_username fn (username string) !string = unsafe { nil }
+	// prepare_authzid applies the application protocol's preparation profile to
+	// a requested authorization identity before `authzid()` exposes it. When
+	// omitted, only printable ASCII is accepted. The callback is not called when
+	// the client sends no authorization identity.
+	prepare_authzid fn (authzid string) !string = unsafe { nil }
 	// lookup returns the credentials stored for `username`, which arrives
 	// already unescaped and prepared.
 	//
@@ -63,8 +68,9 @@ pub struct Server {
 	channel_binding ChannelBinding
 	advertises_plus bool
 	server_nonce    string
-	lookup          fn (username string) !Credentials = unsafe { nil }
+	lookup           fn (username string) !Credentials = unsafe { nil }
 	prepare_username fn (username string) !string = unsafe { nil }
+	prepare_authzid  fn (authzid string) !string = unsafe { nil }
 mut:
 	username     string
 	authzid      string
@@ -102,16 +108,30 @@ pub fn new_server(config ServerConfig) !&Server {
 		} else {
 			config.prepare_username
 		}
+		prepare_authzid: if config.prepare_authzid == unsafe { nil } {
+			prepare_ascii_authzid
+		} else {
+			config.prepare_authzid
+		}
 	}
 }
 
 fn prepare_ascii_username(username string) !string {
-	for c in username.bytes() {
+	return prepare_ascii_identity(username, 'prepare_username with SASLprep')
+}
+
+fn prepare_ascii_authzid(authzid string) !string {
+	return prepare_ascii_identity(authzid,
+		"prepare_authzid with the application protocol's preparation profile")
+}
+
+fn prepare_ascii_identity(identity string, config_hint string) !string {
+	for c in identity.bytes() {
 		if c < ` ` || c > `~` {
-			return error('non-ASCII and control characters require ServerConfig.prepare_username with SASLprep')
+			return error('non-ASCII and control characters require ServerConfig.${config_hint}')
 		}
 	}
-	return username
+	return identity
 }
 
 // str renders a Server without its secrets, for the same reason as
@@ -137,10 +157,10 @@ pub fn (s &Server) username() string {
 	return s.username
 }
 
-// authzid returns the authorization identity the client asked for, or an
-// empty string when it did not ask for one. Authorizing it is the
-// application's job: SCRAM only proves who the client is, never what it may
-// act as.
+// authzid returns the authorization identity the client asked for, unescaped
+// and prepared by `ServerConfig.prepare_authzid`, or an empty string when it
+// did not ask for one. Authorizing it is the application's job: SCRAM only
+// proves who the client is, never what it may act as.
 pub fn (s &Server) authzid() string {
 	return s.authzid
 }
@@ -169,8 +189,22 @@ pub fn (mut s Server) first(client_first string) !string {
 		return error('scram: first() must be called exactly once, with the client-first-message')
 	}
 	s.state = .failed
-	gs2_header, authzid, bare := split_gs2_header(client_first)!
+	gs2_header, wire_authzid, bare := split_gs2_header(client_first)!
 	s.check_cbind_flag(gs2_header)!
+	authzid := if wire_authzid == '' {
+		''
+	} else {
+		s.prepare_authzid(wire_authzid) or {
+			return MalformedMessage{
+				reason: 'invalid authorization identity: ${err.msg()}'
+			}
+		}
+	}
+	if wire_authzid != '' && authzid == '' {
+		return MalformedMessage{
+			reason: 'the prepared authorization identity must not be empty'
+		}
+	}
 	attrs := parse_attributes(bare)!
 	if attrs[0].key == `m` {
 		return MalformedMessage{
