@@ -11,8 +11,10 @@ import encoding.base64
 @[params]
 pub struct ClientConfig {
 pub:
-	// username is the authentication identity. It is escaped as needed, so it
-	// may contain commas and equals signs.
+	// username is the authentication identity. Apply SASLprep (RFC 4013) before
+	// passing every value, including ASCII input. This module validates UTF-8
+	// and NUL but does not normalize the value. Commas and equals signs are
+	// escaped on the wire.
 	username string @[required]
 	// password is the secret. Prepare and validate it before passing it:
 	// SASLprep for `.sha1`, PRECIS OpaqueString for `.sha256`, and the profile
