@@ -527,7 +527,9 @@ fn (mut t Transport) maybe_checkin(mut conn H1PooledConn, header Header, reusabl
 // retrying once on a connection that turned out to be stale), dials otherwise,
 // and returns healthy connections to the pool afterwards.
 fn (mut t Transport) round_trip(req &Request, method Method, scheme string, host string, port int, path string, data string, header Header) !Response {
-	raw := req.build_request_headers_opts(method, host, port, path, data, header, false)
+	default_port := if scheme == 'https' { 443 } else { 80 }
+	raw := req.build_request_headers_opts(method, host, port, default_port, path, data, header,
+		false)
 	$if trace_http_request ? {
 		eprint('> ')
 		eprint(raw)
